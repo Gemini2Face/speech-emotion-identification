@@ -1,45 +1,52 @@
 import streamlit as st
-import numpy as np
+from audiorecorder import audiorecorder
 import librosa
-import io
-from tensorflow.keras.models import load_model
-import joblib
+import numpy as np
+from joblib import load
 
-# Load the model and the label encoder
-model = load_model("C://Users//Malhan//Downloads//Test Audios//emotion_recognition_model.h5")
-label_encoder = joblib.load("C://Users//Malhan//Downloads//Test Audios//label_encoder.pkl")
+# Load your pre-trained model
+model = load("model/emotion_classifier_model.joblib")
 
 
-# Function to process audio for prediction
-def process_audio_for_prediction(audio_data, target_length=227):
-    y, sr = librosa.load(audio_data, sr=None)
-    y_trimmed, _ = librosa.effects.trim(y, top_db=50)
-    S = librosa.feature.melspectrogram(y=y_trimmed, sr=sr, n_mels=19)
-    S_db_mel = librosa.amplitude_to_db(S, ref=np.max)
-    if S_db_mel.shape[1] < target_length:
-        pad_width = target_length - S_db_mel.shape[1]
-        S_db_mel_padded = np.pad(S_db_mel, ((0, 0), (0, pad_width)), mode='constant')
-    else:
-        S_db_mel_padded = S_db_mel[:, :target_length]
-    return S_db_mel_padded.mean(axis=1)
+# Function to preprocess the audio file
+def preprocess_audio(file):
+    # Load and preprocess your audio file as per your model's requirement
+    y, sr = librosa.load(file, sr=None)
+    y_trimmed, _ = librosa.effects.trim(y, top_db=30)
+    stft = np.abs(librosa.stft(y_trimmed))
+    mfccs = np.mean(librosa.feature.mfcc(y=y_trimmed, sr=sr, n_mfcc=40).T, axis=0)
+    mel = np.mean(librosa.feature.melspectrogram(y=y_trimmed, sr=sr).T, axis=0)
+    chroma = np.mean(librosa.feature.chroma_stft(S=stft, sr=sr).T, axis=0)
+    return np.hstack((mfccs, mel, chroma))
 
-# Function to predict emotion from features
-def predict_emotion(features, model, label_encoder):
-    features_scaled = features.reshape(1, 1, -1)
-    prediction = model.predict(features_scaled)
-    predicted_label = np.argmax(prediction, axis=1)[0]
-    predicted_emotion = label_encoder.inverse_transform([predicted_label])
-    return predicted_emotion[0]
 
-# Streamlit app
-st.title("Emotion Recognition from Voice")
+# Function to make prediction
+def predict(audio_data):
+    features = preprocess_audio(audio_data)
+    # Predict and return the emotion
+    prediction = model.predict([features])
+    return prediction
 
-# File uploader for audio
-uploaded_file = st.file_uploader("Upload an audio file for emotion detection", type=["wav", "mp3"])
 
-# Process and predict emotion
-if st.button('Find Emotion') and uploaded_file is not None:
-    audio_data = io.BytesIO(uploaded_file.read())
-    features = process_audio_for_prediction(audio_data)
-    predicted_emotion = predict_emotion(features, model, label_encoder)
-    st.write(f"Predicted Emotion: {predicted_emotion}")
+# Streamlit UI components
+st.title("Audio Emotion Recognition")
+
+# Audio recorder component
+st.write("Record your voice")
+audio = audiorecorder("Click to record", "Click to stop recording")
+
+if audio is not None and len(audio) > 0:
+    # Play the recorded audio
+    st.audio(audio.export().read(), format="audio/wav")
+
+    # Save the audio to a file
+    audio.export("recorded_audio.wav", format="wav")
+
+    # Predict emotion from the recorded audio
+    prediction = predict("recorded_audio.wav")
+    st.write(f"Predicted Emotion: {prediction}")
+
+    # Optional: Display audio properties
+    st.write(
+        f"Frame rate: {audio.frame_rate}, Frame width: {audio.frame_width}, Duration: {audio.duration_seconds} seconds"
+    )
