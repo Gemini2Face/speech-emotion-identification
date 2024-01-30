@@ -1,5 +1,5 @@
 streamlit
-audiorecorder
+streamlit-audiorecorder
 librosa
 numpy
 joblib
