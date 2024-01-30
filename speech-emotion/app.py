@@ -5,7 +5,7 @@ import numpy as np
 from joblib import load
 
 # Load your pre-trained model
-model = load("speech-emotion/model/emotion_classifier_model.joblib")
+model = load("app/static/emotion_classifier_model.joblib")
 
 
 # Function to preprocess the audio file
